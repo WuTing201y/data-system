@@ -74,7 +74,7 @@ KEEP_COLS = [
     "management_org","has_elevator",
 ]
 
-# tool: 民國->西元
+# tool: 民國->西元年月日
 def to_AD_date(s):
     s = str(s).strip()  # .strip() 移除字串前後可能存在的空白字符
     if not s.isdigit() or len(s) > 7:
