@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>房屋交易分析平台 - Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        input, select, button {
+            padding: 12px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .result {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .value {
+            color: #667eea;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-size: 1.2em;
+            padding: 20px;
+        }
+        
+        .error {
+            background: #ffe6e6;
+            color: #d32f2f;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .info-badge {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏠 房屋交易分析平台</h1>
+        
+        <!-- 系統資訊 -->
+        <div class="card">
+            <div id="systemInfo" class="loading">⏳ 載入系統資訊...</div>
+        </div>
+        
+        <!-- 房屋估價 -->
+        <div class="card">
+            <h2>💰 房屋估價</h2>
+            <div class="input-group">
+                <select id="valuationDistrict">
+                    <option value="">⏳ 載入中...</option>
+                </select>
+                <input type="number" id="areaM2" placeholder="面積（平方公尺）" value="80">
+                <button onclick="getValuation()">🔍 開始估價</button>
+            </div>
+            <div id="valuationResult"></div>
+        </div>
+        
+        <!-- 月均價查詢 -->
+        <div class="card">
+            <h2>📊 月均價趨勢</h2>
+            <div class="input-group">
+                <select id="monthlyDistrict">
+                    <option value="">⏳ 載入中...</option>
+                </select>
+                <button onclick="getMonthlyStats()">📈 查看趨勢</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- 年均價查詢 -->
+        <div class="card">
+            <h2>📅 年均價統計</h2>
+            <div class="input-group">
+                <select id="yearlyDistrict">
+                    <option value="">⏳ 載入中...</option>
+                </select>
+                <button onclick="getYearlyStats()">📊 查看統計</button>
+            </div>
+            <div id="yearlyResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        let monthlyChart = null;
+        let allDistricts = [];
+
+        // 初始化：載入所有區域
+        async function initDistricts() {
+            try {
+                // 1. 取得系統健康狀態
+                const healthResponse = await fetch(`${API_BASE}/health`);
+                const healthData = await healthResponse.json();
+                
+                // 顯示系統資訊
+                document.getElementById('systemInfo').innerHTML = `
+                    <div class="info-badge">
+                        ✅ 系統正常運作 | 
+                        📊 總資料筆數: ${healthData.rows.toLocaleString()} 筆 | 
+                        🏘️ 新北市區域: ${healthData.districts_in_NewTaipei} 個 |
+                        📅 資料範圍: ${healthData.date_range[0]} ~ ${healthData.date_range[1]}
+                    </div>
+                `;
+                
+                allDistricts = healthData.district_list || [];
+                
+                // 2. 填充所有下拉選單
+                populateDistrictSelect('valuationDistrict', allDistricts);
+                populateDistrictSelect('monthlyDistrict', allDistricts);
+                populateDistrictSelect('yearlyDistrict', allDistricts, true); // 包含 "ALL"
+                
+                // 3. 自動載入第一個區域的月均價
+                if (allDistricts.length > 0) {
+                    getMonthlyStats();
+                }
+                
+            } catch (error) {
+                document.getElementById('systemInfo').innerHTML = `
+                    <div class="error">❌ 無法連接到 API 服務，請確認 app.py 是否正在運行</div>
+                `;
+                console.error('初始化失敗:', error);
+            }
+        }
+
+        // 填充下拉選單
+        function populateDistrictSelect(selectId, districts, includeAll = false) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '';
+            
+            if (includeAll) {
+                const allOption = document.createElement('option');
+                allOption.value = 'ALL';
+                allOption.textContent = '全新北市';
+                select.appendChild(allOption);
+            }
+            
+            districts.forEach(district => {
+                const option = document.createElement('option');
+                option.value = district;
+                option.textContent = district;
+                select.appendChild(option);
+            });
+        }
+
+        // 房屋估價
+        async function getValuation() {
+            const district = document.getElementById('valuationDistrict').value;
+            const area_m2 = document.getElementById('areaM2').value;
+            const resultDiv = document.getElementById('valuationResult');
+            
+            if (!district) {
+                resultDiv.innerHTML = '<div class="error">❌ 請選擇區域</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="loading">⏳ 計算中...</div>';
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/valuation?city=NewTaipei&district=${encodeURIComponent(district)}&area_m2=${area_m2}&usage=住家用`
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="result-item">
+                            <span class="label">區域</span>
+                            <span class="value">${district}</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="label">面積</span>
+                            <span class="value">${data.area_m2} m² (${data.area_ping} 坪)</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="label">每坪單價</span>
+                            <span class="value">${data.baseline_pp_ping.toLocaleString()} 萬</span>
+                        </div>
+                        <div class="result-item" style="background: #e8f5e9; padding: 15px; border-radius: 8px;">
+                            <span class="label" style="font-size: 1.3em;">💰 預估總價</span>
+                            <span class="value" style="color: #2e7d32; font-size: 1.5em;">
+                                ${data.est_total.toLocaleString()} 萬元
+                            </span>
+                        </div>
+                        <p style="margin-top: 15px; color: #666; font-size: 0.9em;">
+                            ⚠️ 此價格已根據該區平均屋齡進行風險校正（近 24 個月資料）
+                        </p>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 查詢失敗：${error.message}<br>可能是該區域資料不足</div>`;
+            }
+        }
+
+        // 月均價趨勢
+        async function getMonthlyStats() {
+            const district = document.getElementById('monthlyDistrict').value;
+            const canvas = document.getElementById('monthlyChart');
+            
+            if (!district) return;
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/stats/monthly?city=NewTaipei&district=${encodeURIComponent(district)}&usage=住家用`
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    alert('該區域沒有足夠的資料');
+                    return;
+                }
+                
+                // 準備圖表資料
+                const labels = data.map(item => item.month.substring(0, 7)); // 取 YYYY-MM
+                const rawPrices = data.map(item => item.avg_raw);
+                const adjPrices = data.map(item => item.avg_adj);
+                
+                // 銷毀舊圖表
+                if (monthlyChart) {
+                    monthlyChart.destroy();
+                }
+                
+                // 建立新圖表
+                monthlyChart = new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: '原始均價',
+                                data: rawPrices,
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: '風險校正後均價',
+                                data: adjPrices,
+                                borderColor: '#f093fb',
+                                backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `${district} 月均價趨勢 (${data.length} 個月資料)`,
+                                font: { size: 18 }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.dataset.label + ': ' + 
+                                               context.parsed.y.toFixed(2) + ' 萬/坪';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: '萬元/坪'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                alert('查詢失敗：' + error.message);
+            }
+        }
+
+        // 年均價統計
+        async function getYearlyStats() {
+            const district = document.getElementById('yearlyDistrict').value;
+            const resultDiv = document.getElementById('yearlyResult');
+            
+            if (!district) {
+                resultDiv.innerHTML = '<div class="error">❌ 請選擇區域</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="loading">⏳ 查詢中...</div>';
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/stats/yearly?city=NewTaipei&district=${encodeURIComponent(district)}&usage=住家用`
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    resultDiv.innerHTML = '<div class="error">❌ 該區域沒有資料</div>';
+                    return;
+                }
+                
+                let html = '<div class="result">';
+                data.forEach(item => {
+                    html += `
+                        <div class="result-item">
+                            <span class="label">${item.year} 年</span>
+                            <span class="value">
+                                ${item.avg_raw.toFixed(2)} 萬/坪
+                                <small style="color: #999; font-size: 0.8em;">
+                                    (校正後: ${item.avg_adj.toFixed(2)} 萬)
+                                </small>
+                                <br>
+                                <small style="color: #999; font-size: 0.8em;">
+                                    📊 ${item.n.toLocaleString()} 筆交易
+                                </small>
+                            </span>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 查詢失敗：${error.message}</div>`;
+            }
+        }
+
+        // 頁面載入時自動初始化
+        window.onload = function() {
+            initDistricts();
+        };
+    </script>
+</body>
+</html>
