@@ -61,17 +61,44 @@ COLMAP = {
 
 # 想要保留的欄位
 KEEP_COLS = [
-    "record_id","transfer_id",
-    "trade_date","city","district","address",
-    "trade_target","building_type","usage","material","build_complete_date",
-    "total_floors","transfer_floor",
-    "building_area_m2","main_building_area_m2","accessory_area_m2","balcony_area_m2",
-    "land_area_m2",
-    "price_total","unit_price_m2",
-    "layout_room","layout_living","layout_bath","layout_partition",
-    "parking_type","parking_area_m2","parking_price",
-    "urban_zone","nonurban_zone","nonurban_code",
-    "management_org","has_elevator",
+    "city",
+	"district",
+	"address",
+	"trade_target",
+	"trade_date",
+	"transaction_count",
+	"building_type",
+	"usage",
+	"material",
+	"build_complete_date",
+	"total_floors",
+	"transfer_floor",
+	"building_area_m2",
+	"main_building_area_m2",
+	"accessory_area_m2",
+	"balcony_area_m2",
+	"land_area_m2",
+	"price_total",
+	"unit_price_m2",
+	"layout_room",
+	"layout_living",
+	"layout_bath",
+	"layout_partition",
+	"parking_type",
+	"parking_area_m2",
+	"parking_price",
+	"urban_zone",
+	"nonurban_zone",
+	"nonurban_code",
+	"management_org",
+	"has_elevator",
+	"note",
+	"record_id",
+	"transfer_id",
+    "area_ping","price_per_ping","age_years",
+    "year","month","quarter",
+    "total_floors_num","transfer_floor_num","floor_ratio"
+
 ]
 
 # tool: 民國->西元年月日
@@ -98,7 +125,7 @@ CN_NUM = dict(zip("零一二三四五六七八九十",[0,1,2,3,4,5,6,7,8,9,10]))
 def cn_floor_to_int(s):
     if pd.isna(s): return np.nan  # pd.isna() 檢查輸入的 s 是否為 Pandas 或 NumPy 中的缺失值（例如 None 或 np.nan）
     s = str(s).replace("層", "")
-    if s in ["全", "頂樓加蓋"] or "陽台" or "陽臺" in s or s.strip() == "": return np.nan
+    if s in ["全", "頂樓加蓋"] or ("陽台" in s) or ("陽臺" in s) or s.strip() == "": return np.nan
     
     # 處理地下樓層
     if "地" in s and "下" in s:
@@ -235,10 +262,7 @@ def main():
     all_df['floor'] = all_df['transfer_floor_num']
 
     # 欄位順序（交付版）
-    cols = ["trade_date","year","quarter","city","district",
-            "age_years","area_m2","area_ping","price_total","price_per_ping",
-            "unit_price_m2","usage","total_floors","floor","risk_factor"]
-    all_df = all_df[cols].sort_values(["city","district","trade_date"])
+    all_df = all_df[KEEP_COLS].sort_values(["city","district","trade_date"])
 
     out_path = os.path.join(CLEAN_DIR, "transactions_clean.csv")
     all_df.to_csv(out_path, index=False, encoding="utf-8-sig")
