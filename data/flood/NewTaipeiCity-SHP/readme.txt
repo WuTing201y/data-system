@@ -1,0 +1,1 @@
+檔案格式說明：https://data.gov.tw/faqs/631
