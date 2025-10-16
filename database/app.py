@@ -7,12 +7,45 @@ from typing import Optional, List, Dict
 from pathlib import Path
 import pandas as pd
 import re, math, io, sys
+import os
+import urllib.request
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# 使用絕對路徑或相對於此檔案的路徑
+# 遠端 SQL 檔案 URL（從環境變數讀取，或使用預設的 GitHub Release）
+REMOTE_SQL_URL = os.getenv(
+    "REMOTE_SQL_URL",
+    "https://github.com/WuTing201y/data-system/releases/download/v1.0/houseDatabase_version_1.sql"
+)
+
+# 本地快取路徑
 SQL_PATH = Path(__file__).parent / "houseDatabase_version_1.sql"
 PING_PER_M2 = 1 / 3.305785
+
+def _download_sql_if_needed():
+    """如果本地沒有 SQL 檔案，從遠端下載"""
+    if SQL_PATH.exists():
+        print(f"✅ 使用本地 SQL 檔案: {SQL_PATH}")
+        return
+    
+    print(f"📥 本地無 SQL 檔案，開始從遠端下載...")
+    print(f"   URL: {REMOTE_SQL_URL}")
+    
+    try:
+        # 下載到臨時檔案
+        temp_path = SQL_PATH.with_suffix('.sql.tmp')
+        urllib.request.urlretrieve(REMOTE_SQL_URL, temp_path)
+        
+        # 下載成功，重新命名
+        temp_path.rename(SQL_PATH)
+        
+        size_mb = SQL_PATH.stat().st_size / (1024 * 1024)
+        print(f"✅ 下載完成！檔案大小: {size_mb:.1f} MB")
+        
+    except Exception as e:
+        print(f"❌ 下載失敗: {e}")
+        print(f"   請確認 URL 正確或手動上傳 SQL 檔案到: {SQL_PATH}")
+        raise RuntimeError(f"無法載入 SQL 資料: {e}")
 
 NEWTAIPEI_29 = [
     "板橋區","三重區","中和區","永和區","新莊區","新店區","樹林區","鶯歌區","三峽區",
@@ -277,6 +310,10 @@ def _prepare_df(sql_path: str):
     return df
 
 print("⏳ 初始化中...")
+
+# 檢查並下載 SQL 檔案（如果需要）
+_download_sql_if_needed()
+
 DF = _prepare_df(SQL_PATH)
 print(f"✅ 載入完成！共 {len(DF):,} 筆資料")
 
