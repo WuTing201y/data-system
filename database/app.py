@@ -10,7 +10,8 @@ import re, math, io, sys
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-SQL_PATH = "houseDatabase_version_1.sql"
+# 使用絕對路徑或相對於此檔案的路徑
+SQL_PATH = Path(__file__).parent / "houseDatabase_version_1.sql"
 PING_PER_M2 = 1 / 3.305785
 
 NEWTAIPEI_29 = [
@@ -139,9 +140,12 @@ def _split_tuples_improved(values_text: str) -> list:
     
     return rows
 
-def _load_df_from_sql(sql_path: str) -> pd.DataFrame:
+def _load_df_from_sql(sql_path) -> pd.DataFrame:
     """載入並解析 SQL dump 檔案"""
-    text = Path(sql_path).read_text(encoding="utf-8", errors="ignore")
+    sql_path = Path(sql_path)
+    if not sql_path.exists():
+        raise FileNotFoundError(f"SQL file not found: {sql_path}")
+    text = sql_path.read_text(encoding="utf-8", errors="ignore")
 
     pattern = re.compile(
         r"INSERT\s+INTO\s+`?houses`?\s*(\([^)]+\))?\s+VALUES\s*(.+?);",
@@ -362,6 +366,37 @@ def debug_districts_full(limit:int=200):
 
 print(f"🔧 SQL: {SQL_PATH}")
 print("✅ API ready — run with: uvicorn app:app --reload")
+
+# ===================== 前端相容路由 =====================
+@app.get("/api/monthly-stats")
+def api_monthly_stats(
+    city: str = Query(default="NewTaipei"),
+    district: str = Query(default="ALL"),
+    usage: str = Query(default="住家用")
+):
+    return stats_monthly(city, district, usage)
+
+@app.get("/api/yearly-stats")
+def api_yearly_stats(
+    city: str = Query(default="NewTaipei"),
+    district: str = Query(default="ALL"),
+    usage: str = Query(default="住家用")
+):
+    return stats_yearly(city, district, usage)
+
+@app.get("/api/house-estimate")
+def api_house_estimate(
+    district: str = Query(..., description="行政區"),
+    area: float = Query(..., description="面積（坪）")
+):
+    # 前端傳坪數，後端需要平方公尺
+    area_m2 = area / PING_PER_M2
+    return valuation(
+        city="NewTaipei",
+        district=district,
+        area_m2=area_m2,
+        usage="住家用"
+    )
 
 if __name__ == "__main__":
     import uvicorn
