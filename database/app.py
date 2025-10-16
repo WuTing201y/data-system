@@ -56,7 +56,13 @@ NEWTAIPEI_29 = [
 BASE29 = [d[:-1] for d in NEWTAIPEI_29]
 BASE_MAP = {b: b + "區" for b in BASE29}
 
-app = FastAPI(title="House AI Estimation API", version="1.0.0")
+app = FastAPI(
+    title="House AI Estimation API",
+    version="1.0.0",
+    description="新北市房價分析與估價 API",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True
@@ -328,6 +334,26 @@ def _filter_df(city=None, district=None, usage="住家用", start_date=None, end
     return sub
 
 # ===================== API =====================
+@app.get("/")
+def root():
+    """根路徑 - 返回 API 資訊和可用端點"""
+    return {
+        "name": "House AI Estimation API",
+        "version": "1.0.0",
+        "status": "running",
+        "total_records": int(len(DF)),
+        "endpoints": {
+            "health": "/health",
+            "documentation": "/docs",
+            "redoc": "/redoc",
+            "regions": "/regions?city=NewTaipei",
+            "monthly_stats": "/api/monthly-stats?city=NewTaipei&district=板橋區",
+            "yearly_stats": "/api/yearly-stats?city=NewTaipei&district=板橋區",
+            "house_estimate": "/api/house-estimate?district=板橋區&area=30"
+        },
+        "github": "https://github.com/WuTing201y/data-system"
+    }
+
 @app.get("/health")
 def health():
     districts = DF.loc[DF["city"]=="NewTaipei","district"].dropna().unique().tolist()
